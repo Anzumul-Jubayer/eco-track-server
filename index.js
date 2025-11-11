@@ -107,16 +107,34 @@ app.post("/challenges-add", async (req, res) => {
   try {
     const newChallenge = req.body;
 
-    if (!newChallenge.title || !newChallenge.description) {
+    if (!newChallenge.title || !newChallenge.description || !newChallenge.imageUrl) {
       return res
         .status(400)
-        .json({ error: "Title and description are required" });
+        .json({ error: "Title, description, and imageUrl are required" });
     }
+
+    
+    const existing = await challengesCollection.findOne({
+      $or: [
+        { title: newChallenge.title },
+        { description: newChallenge.description },
+        { imageUrl: newChallenge.imageUrl },
+      ],
+    });
+
+    if (existing) {
+      return res.status(400).json({
+        error: "A challenge with the same title, description, or image already exists",
+      });
+    }
+
+    const now = new Date();
 
     const challengeToInsert = {
       ...newChallenge,
       participants: newChallenge.participants || 0,
-      createdAt: new Date(),
+      createdAt: now,
+      updatedAt: now,
     };
 
     const result = await challengesCollection.insertOne(challengeToInsert);
@@ -130,6 +148,8 @@ app.post("/challenges-add", async (req, res) => {
     res.status(500).json({ error: "Failed to add challenge" });
   }
 });
+
+
 
 // live statistics
 app.get("/statistics", async (req, res) => {
