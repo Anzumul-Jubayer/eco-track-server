@@ -26,6 +26,7 @@ async function run() {
     const db = client.db("ecotrack-db"); 
     challengesCollection = db.collection("challenges"); 
     tipsCollection=db.collection('tips')
+    eventsCollection=db.collection('events')
     console.log("Connected to MongoDB!");
   } catch (err) {
     console.error(err);
@@ -99,7 +100,22 @@ app.get("/recent-tips", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch recent tips" });
   }
 });
+// upcoming-events
+app.get("/events-upcoming", async (req, res) => {
+  try {
+    const today = new Date();
+    const upcomingEvents = await eventsCollection
+      .find({ date: { $gte: today.toISOString() } })
+      .sort({ date: 1 }) 
+      .limit(4)
+      .toArray();
 
+    res.json(upcomingEvents);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch upcoming events" });
+  }
+})
 app.listen(port, () => {
   console.log(`EcoTrack server listening on port ${port}`);
 });
