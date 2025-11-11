@@ -40,6 +40,16 @@ app.get("/", (req, res) => {
   res.send("Server is running");
 });
 
+// challenges
+app.get("/challenges", async (req, res) => {
+  try {
+    const allChallenges = await challengesCollection.find({}).toArray();
+    res.json(allChallenges);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch challenges" });
+  }
+});
 
 // active-challenges
 app.get("/challenges-active", async (req, res) => {
