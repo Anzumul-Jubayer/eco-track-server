@@ -41,25 +41,13 @@ app.get("/", (req, res) => {
 });
 
 // challenges with filter
-// app.get("/challenges", async (req, res) => {
-//   try {
-//     const allChallenges = await challengesCollection.find({}).toArray();
-//     res.json(allChallenges);
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ error: "Failed to fetch challenges" });
-//   }
-// });
-
-// active-challenges
-// Get all challenges with optional filtering
 app.get("/challenges", async (req, res) => {
   try {
     const { category, startDate, endDate, participantsMin, participantsMax } =
       req.query;
     let filter = {};
     if (category) {
-      const categories = category.split(","); 
+      const categories = category.split(",");
       filter.category = { $in: categories };
     }
     if (startDate || endDate) {
@@ -102,13 +90,44 @@ app.get("/challenges/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { ObjectId } = require("mongodb");
-    const challenge = await challengesCollection.findOne({ _id: new ObjectId(id) });
+    const challenge = await challengesCollection.findOne({
+      _id: new ObjectId(id),
+    });
 
-    if (!challenge) return res.status(404).json({ error: "Challenge not found" });
+    if (!challenge)
+      return res.status(404).json({ error: "Challenge not found" });
     res.json(challenge);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch challenge" });
+  }
+});
+// Add new challenge
+app.post("/challenges-add", async (req, res) => {
+  try {
+    const newChallenge = req.body;
+
+    if (!newChallenge.title || !newChallenge.description) {
+      return res
+        .status(400)
+        .json({ error: "Title and description are required" });
+    }
+
+    const challengeToInsert = {
+      ...newChallenge,
+      participants: newChallenge.participants || 0,
+      createdAt: new Date(),
+    };
+
+    const result = await challengesCollection.insertOne(challengeToInsert);
+
+    res.status(201).json({
+      message: "✅ Challenge added successfully!",
+      id: result.insertedId,
+    });
+  } catch (error) {
+    console.error("Error adding challenge:", error);
+    res.status(500).json({ error: "Failed to add challenge" });
   }
 });
 
