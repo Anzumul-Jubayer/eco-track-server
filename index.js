@@ -1,9 +1,10 @@
 const express = require("express");
 const cors = require("cors");
-const app = express();
 require("dotenv").config();
-const port = 3000;
 const { MongoClient, ServerApiVersion } = require("mongodb");
+
+const app = express();
+const port = 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -17,52 +18,52 @@ const client = new MongoClient(uri, {
   },
 });
 
-// Connect to MongoDB
+let challengesCollection;
+
 async function run() {
   try {
     await client.connect();
+    const db = client.db("ecotrack-db"); 
+    challengesCollection = db.collection("challenges"); 
     console.log("Connected to MongoDB!");
   } catch (err) {
     console.error(err);
   }
 }
+
 run().catch(console.dir);
 
-
+// Routes
 app.get("/", (req, res) => {
   res.send("Server is running");
 });
 
 
+
+
 // live statistics
 app.get("/statistics", async (req, res) => {
   try {
-    const db = client.db("ecotrack-db");
-    const challengesCollection = db.collection("challenges");
+    const challenges = await challengesCollection.find({}).toArray();
 
-    
-    const allChallenges = await challengesCollection.find({}).toArray();
     let totalParticipants = 0;
-    let totalImpact = 0;
+    let impactTotals = {};
 
-    allChallenges.forEach((c) => {
+    challenges.forEach((c) => {
       totalParticipants += c.participants || 0;
 
-      
-      const value = parseFloat(c.impactMetric?.match(/\d+/)?.[0] || 0);
-      totalImpact += value;
+      if (c.impactMetric && c.impactMetric.unit && c.impactMetric.value) {
+        if (!impactTotals[c.impactMetric.unit]) impactTotals[c.impactMetric.unit] = 0;
+        impactTotals[c.impactMetric.unit] += c.impactMetric.value;
+      }
     });
 
-    res.json({
-      totalParticipants,
-      totalImpact,
-    });
+    res.json({ totalParticipants, impactTotals });
   } catch (err) {
-    console.error(err);
+    console.error("Statistics error:", err);
     res.status(500).json({ error: "Failed to fetch statistics" });
   }
 });
-
 
 app.listen(port, () => {
   console.log(`EcoTrack server listening on port ${port}`);
