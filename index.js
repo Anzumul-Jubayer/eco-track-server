@@ -23,10 +23,10 @@ let challengesCollection;
 async function run() {
   try {
     await client.connect();
-    const db = client.db("ecotrack-db"); 
-    challengesCollection = db.collection("challenges"); 
-    tipsCollection=db.collection('tips')
-    eventsCollection=db.collection('events')
+    const db = client.db("ecotrack-db");
+    challengesCollection = db.collection("challenges");
+    tipsCollection = db.collection("tips");
+    eventsCollection = db.collection("events");
     console.log("Connected to MongoDB!");
   } catch (err) {
     console.error(err);
@@ -40,22 +40,49 @@ app.get("/", (req, res) => {
   res.send("Server is running");
 });
 
-// challenges
+// challenges with filter
+// app.get("/challenges", async (req, res) => {
+//   try {
+//     const allChallenges = await challengesCollection.find({}).toArray();
+//     res.json(allChallenges);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ error: "Failed to fetch challenges" });
+//   }
+// });
+
+// active-challenges
+// Get all challenges with optional filtering
 app.get("/challenges", async (req, res) => {
   try {
-    const allChallenges = await challengesCollection.find({}).toArray();
-    res.json(allChallenges);
+    const { category, startDate, endDate, participantsMin, participantsMax } =
+      req.query;
+    let filter = {};
+    if (category) {
+      const categories = category.split(","); 
+      filter.category = { $in: categories };
+    }
+    if (startDate || endDate) {
+      filter.startDate = {};
+      if (startDate) filter.startDate.$gte = startDate;
+      if (endDate) filter.startDate.$lte = endDate;
+    }
+    if (participantsMin || participantsMax) {
+      filter.participants = {};
+      if (participantsMin) filter.participants.$gte = parseInt(participantsMin);
+      if (participantsMax) filter.participants.$lte = parseInt(participantsMax);
+    }
+    const challenges = await challengesCollection.find(filter).toArray();
+    res.json(challenges);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch challenges" });
   }
 });
 
-// active-challenges
 app.get("/challenges-active", async (req, res) => {
   try {
-    
-    const today = new Date().toISOString().split("T")[0]; 
+    const today = new Date().toISOString().split("T")[0];
 
     const activeChallenges = await challengesCollection
       .find({
@@ -71,7 +98,6 @@ app.get("/challenges-active", async (req, res) => {
   }
 });
 
-
 // live statistics
 app.get("/statistics", async (req, res) => {
   try {
@@ -84,7 +110,8 @@ app.get("/statistics", async (req, res) => {
       totalParticipants += c.participants || 0;
 
       if (c.impactMetric && c.impactMetric.unit && c.impactMetric.value) {
-        if (!impactTotals[c.impactMetric.unit]) impactTotals[c.impactMetric.unit] = 0;
+        if (!impactTotals[c.impactMetric.unit])
+          impactTotals[c.impactMetric.unit] = 0;
         impactTotals[c.impactMetric.unit] += c.impactMetric.value;
       }
     });
@@ -116,7 +143,7 @@ app.get("/events-upcoming", async (req, res) => {
     const today = new Date();
     const upcomingEvents = await eventsCollection
       .find({ date: { $gte: today.toISOString() } })
-      .sort({ date: 1 }) 
+      .sort({ date: 1 })
       .limit(4)
       .toArray();
 
@@ -125,7 +152,7 @@ app.get("/events-upcoming", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch upcoming events" });
   }
-})
+});
 app.listen(port, () => {
   console.log(`EcoTrack server listening on port ${port}`);
 });
