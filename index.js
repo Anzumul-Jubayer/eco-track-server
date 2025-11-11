@@ -25,6 +25,7 @@ async function run() {
     await client.connect();
     const db = client.db("ecotrack-db"); 
     challengesCollection = db.collection("challenges"); 
+    tipsCollection=db.collection('tips')
     console.log("Connected to MongoDB!");
   } catch (err) {
     console.error(err);
@@ -81,6 +82,21 @@ app.get("/statistics", async (req, res) => {
   } catch (err) {
     console.error("Statistics error:", err);
     res.status(500).json({ error: "Failed to fetch statistics" });
+  }
+});
+// Recent Tips
+app.get("/recent-tips", async (req, res) => {
+  try {
+    const recentTips = await tipsCollection
+      .find({})
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .toArray();
+
+    res.json(recentTips);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch recent tips" });
   }
 });
 
