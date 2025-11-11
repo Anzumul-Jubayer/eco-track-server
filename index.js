@@ -1,16 +1,14 @@
 const express = require("express");
 const cors = require("cors");
 const app = express();
-require('dotenv').config()
+require("dotenv").config();
 const port = 3000;
 const { MongoClient, ServerApiVersion } = require("mongodb");
+
 app.use(cors());
 app.use(express.json());
 
-const uri =
-  `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.3w2hwbo.mongodb.net/?appName=Cluster0`;
-
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+const uri = `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.3w2hwbo.mongodb.net/?appName=Cluster0`;
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -19,24 +17,53 @@ const client = new MongoClient(uri, {
   },
 });
 
+// Connect to MongoDB
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
-    // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
-  } finally {
-    // Ensures that the client will close when you finish/error
-    // await client.close();
+    console.log("Connected to MongoDB!");
+  } catch (err) {
+    console.error(err);
   }
 }
 run().catch(console.dir);
+
+
 app.get("/", (req, res) => {
-  res.send("server is running");
+  res.send("Server is running");
 });
+
+
+// live statistics
+app.get("/statistics", async (req, res) => {
+  try {
+    const db = client.db("ecotrack-db");
+    const challengesCollection = db.collection("challenges");
+
+    
+    const allChallenges = await challengesCollection.find({}).toArray();
+    let totalParticipants = 0;
+    let totalImpact = 0;
+
+    allChallenges.forEach((c) => {
+      totalParticipants += c.participants || 0;
+
+      
+      const value = parseFloat(c.impactMetric?.match(/\d+/)?.[0] || 0);
+      totalImpact += value;
+    });
+
+    res.json({
+      totalParticipants,
+      totalImpact,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch statistics" });
+  }
+});
+
+
 app.listen(port, () => {
-  console.log(`Eco track listening on port ${port}`);
+  console.log(`EcoTrack server listening on port ${port}`);
 });
