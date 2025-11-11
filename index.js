@@ -39,6 +39,25 @@ app.get("/", (req, res) => {
 });
 
 
+// active-challenges
+app.get("/challenges-active", async (req, res) => {
+  try {
+    
+    const today = new Date().toISOString().split("T")[0]; 
+
+    const activeChallenges = await challengesCollection
+      .find({
+        startDate: { $lte: today },
+        endDate: { $gte: today },
+      })
+      .toArray();
+
+    res.json(activeChallenges);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch active challenges" });
+  }
+});
 
 
 // live statistics
