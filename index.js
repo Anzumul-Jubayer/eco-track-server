@@ -79,7 +79,7 @@ app.get("/challenges", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch challenges" });
   }
 });
-
+// active-challenges
 app.get("/challenges-active", async (req, res) => {
   try {
     const today = new Date().toISOString().split("T")[0];
@@ -95,6 +95,20 @@ app.get("/challenges-active", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch active challenges" });
+  }
+});
+// challenge Details
+app.get("/challenges/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { ObjectId } = require("mongodb");
+    const challenge = await challengesCollection.findOne({ _id: new ObjectId(id) });
+
+    if (!challenge) return res.status(404).json({ error: "Challenge not found" });
+    res.json(challenge);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch challenge" });
   }
 });
 
