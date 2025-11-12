@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
 const port = 3000;
@@ -19,14 +19,26 @@ const client = new MongoClient(uri, {
 });
 
 let challengesCollection;
+let tipsCollection;
+let eventsCollection;
+let userChallengesCollection;
 
 async function run() {
   try {
     await client.connect();
     const db = client.db("ecotrack-db");
+
     challengesCollection = db.collection("challenges");
     tipsCollection = db.collection("tips");
     eventsCollection = db.collection("events");
+    userChallengesCollection = db.collection("userChallenges");
+
+    // Ensure unique index on userId + challengeId
+    await userChallengesCollection.createIndex(
+      { userId: 1, challengeId: 1 },
+      { unique: true }
+    );
+
     console.log("Connected to MongoDB!");
   } catch (err) {
     console.error(err);
@@ -35,10 +47,10 @@ async function run() {
 
 run().catch(console.dir);
 
-// Routes
-app.get("/", (req, res) => {
-  res.send("Server is running");
-});
+// ------------------- ROUTES -------------------
+
+// Server check
+app.get("/", (req, res) => res.send("Server is running"));
 
 // challenges with filter
 app.get("/challenges", async (req, res) => {
@@ -85,15 +97,13 @@ app.get("/challenges-active", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch active challenges" });
   }
 });
-// challenge Details
+
+// Challenge details
 app.get("/challenges/:id", async (req, res) => {
   try {
-    const { id } = req.params;
-    const { ObjectId } = require("mongodb");
     const challenge = await challengesCollection.findOne({
-      _id: new ObjectId(id),
+      _id: new ObjectId(req.params.id),
     });
-
     if (!challenge)
       return res.status(404).json({ error: "Challenge not found" });
     res.json(challenge);
@@ -102,6 +112,7 @@ app.get("/challenges/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch challenge" });
   }
 });
+
 // Add new challenge
 app.post("/challenges-add", async (req, res) => {
   try {
@@ -151,18 +162,89 @@ app.post("/challenges-add", async (req, res) => {
 
 
 
-// live statistics
+// Join challenge 
+app.patch("/challenges-join/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: "User ID required" });
+
+    const challengeId = new ObjectId(id);
+    const now = new Date();
+    const result = await userChallengesCollection.updateOne(
+      { userId, challengeId },
+      {
+        $setOnInsert: {
+          status: "Not Started",
+          progress: 0,
+          joinDate: now,
+          lastUpdated: now,
+        },
+      },
+      { upsert: true }
+    );
+    if (result.upsertedCount > 0) {
+      await challengesCollection.updateOne(
+        { _id: challengeId },
+        { $inc: { participants: 1 }, $set: { updatedAt: now } }
+      );
+      return res.status(200).json({ message: "Successfully joined!" });
+    } 
+    res.json({ message: "Already joined" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to join challenge" });
+  }
+});
+
+// Update progress
+app.patch("/user-challenges/:id/progress", async (req, res) => {
+  try {
+    const { progress, status } = req.body;
+    const updateData = { lastUpdated: new Date() };
+    if (progress !== undefined) updateData.progress = progress;
+    if (status) updateData.status = status;
+
+    const result = await userChallengesCollection.updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: updateData }
+    );
+
+    if (result.modifiedCount === 0)
+      return res.status(404).json({ error: "Record not found" });
+
+    res.json({ message: "Progress updated successfully!" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update progress" });
+  }
+});
+
+// Get user's challenges
+app.get("/user-challenges/:userId", async (req, res) => {
+  try {
+    const records = await userChallengesCollection
+      .find({ userId: req.params.userId })
+      .toArray();
+    res.json(records);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch user challenges" });
+  }
+});
+
+
+
+// Stats
 app.get("/statistics", async (req, res) => {
   try {
     const challenges = await challengesCollection.find({}).toArray();
-
-    let totalParticipants = 0;
-    let impactTotals = {};
+    let totalParticipants = 0,
+      impactTotals = {};
 
     challenges.forEach((c) => {
       totalParticipants += c.participants || 0;
-
-      if (c.impactMetric && c.impactMetric.unit && c.impactMetric.value) {
+      if (c.impactMetric?.unit && c.impactMetric?.value) {
         if (!impactTotals[c.impactMetric.unit])
           impactTotals[c.impactMetric.unit] = 0;
         impactTotals[c.impactMetric.unit] += c.impactMetric.value;
@@ -171,11 +253,12 @@ app.get("/statistics", async (req, res) => {
 
     res.json({ totalParticipants, impactTotals });
   } catch (err) {
-    console.error("Statistics error:", err);
+    console.error(err);
     res.status(500).json({ error: "Failed to fetch statistics" });
   }
 });
-// Recent Tips
+
+// Recent tips
 app.get("/recent-tips", async (req, res) => {
   try {
     const recentTips = await tipsCollection
@@ -183,14 +266,14 @@ app.get("/recent-tips", async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(5)
       .toArray();
-
     res.json(recentTips);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch recent tips" });
   }
 });
-// upcoming-events
+
+// Upcoming events
 app.get("/events-upcoming", async (req, res) => {
   try {
     const today = new Date();
@@ -199,13 +282,13 @@ app.get("/events-upcoming", async (req, res) => {
       .sort({ date: 1 })
       .limit(4)
       .toArray();
-
     res.json(upcomingEvents);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch upcoming events" });
   }
 });
-app.listen(port, () => {
-  console.log(`EcoTrack server listening on port ${port}`);
-});
+
+app.listen(port, () =>
+  console.log(`EcoTrack server listening on port ${port}`)
+);
