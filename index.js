@@ -25,7 +25,7 @@ let userChallengesCollection;
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     const db = client.db("ecotrack-db");
 
     challengesCollection = db.collection("challenges");
@@ -49,7 +49,7 @@ run().catch(console.dir);
 
 // routes
 
-// Server check
+//  check
 app.get("/", (req, res) => res.send("Server is running"));
 
 // challenges with filter
