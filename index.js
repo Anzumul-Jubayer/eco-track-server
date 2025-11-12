@@ -33,7 +33,7 @@ async function run() {
     eventsCollection = db.collection("events");
     userChallengesCollection = db.collection("userChallenges");
 
-    // Ensure unique index on userId + challengeId
+    
     await userChallengesCollection.createIndex(
       { userId: 1, challengeId: 1 },
       { unique: true }
@@ -47,7 +47,7 @@ async function run() {
 
 run().catch(console.dir);
 
-// ------------------- ROUTES -------------------
+// routes
 
 // Server check
 app.get("/", (req, res) => res.send("Server is running"));
@@ -275,6 +275,51 @@ app.get("/my-activities/:email", async (req, res) => {
   }
 });
 
+// Get single user challenge by ID
+app.get("/user-challenges/item/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const item = await userChallengesCollection.findOne({ _id: new ObjectId(id) });
+    if (!item) return res.status(404).json({ error: "Not found" });
+
+    
+    const challenge = await challengesCollection.findOne({ _id: item.challengeId });
+    if (challenge) item.challengeTitle = challenge.title;
+
+    res.json(item);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Update user challenge progress
+app.patch("/user-challenges/update/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { progress, status } = req.body;
+
+    const update = {
+      $set: {
+        progress: Number(progress),
+        status: status || "Ongoing",
+        lastUpdated: new Date(),
+      },
+    };
+
+    const result = await userChallengesCollection.findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      update,
+      { returnDocument: "after" }
+    );
+
+    if (!result) return res.status(404).json({ error: "Not found" });
+    res.json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 // Stats
 app.get("/statistics", async (req, res) => {
