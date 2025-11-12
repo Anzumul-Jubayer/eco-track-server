@@ -233,6 +233,47 @@ app.get("/user-challenges/:userId", async (req, res) => {
   }
 });
 
+// my-activities
+app.get("/my-activities/:email", async (req, res) => {
+  try {
+    const email = req.params.email;
+
+    const result = await userChallengesCollection.aggregate([
+      {
+        $match: { userId: email },
+      },
+      {
+        $lookup: {
+          from: "challenges",
+          localField: "challengeId",
+          foreignField: "_id",
+          as: "challengeData",
+        },
+      },
+      {
+        $unwind: "$challengeData",
+      },
+      {
+        $project: {
+          _id: 1,
+          userId: 1,
+          challengeId: 1,
+          progress: 1,
+          status: 1,
+          challengeTitle: "$challengeData.title", 
+          category: "$challengeData.category",
+          duration: "$challengeData.duration",
+          target: "$challengeData.target",
+        },
+      },
+    ]).toArray();
+
+    res.send(result);
+  } catch (error) {
+    console.error("❌ Error fetching user activities:", error);
+    res.status(500).send({ message: "Server error" });
+  }
+});
 
 
 // Stats
