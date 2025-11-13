@@ -1,6 +1,7 @@
 # EcoTrack 
 
 [Live Site](https://eco-track-a10.netlify.app/)
+[Server Site](https://eco-track-server-pied.vercel.app/)
 
 EcoTrack is a community-base platform that help people doing more eco friendly activity together.This platform can track users eco-challenges, join green events, and make a real impact in our society.
 
