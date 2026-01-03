@@ -32,8 +32,7 @@ async function run() {
     tipsCollection = db.collection("tips");
     eventsCollection = db.collection("events");
     userChallengesCollection = db.collection("userChallenges");
-
-    
+    usersCollection=db.collection('users')
     await userChallengesCollection.createIndex(
       { userId: 1, challengeId: 1 },
       { unique: true }
@@ -52,33 +51,85 @@ run().catch(console.dir);
 //  check
 app.get("/", (req, res) => res.send("Server is running"));
 
-// challenges with filter
+// challenges with filter , sort and search
+
 app.get("/challenges", async (req, res) => {
   try {
-    const { category, startDate, endDate, participantsMin, participantsMax } =
-      req.query;
+    const { category, startDate, endDate, search, sort, page = 1 } = req.query;
+
+    const pageNum = parseInt(page) || 1;
+    const pageSize = 8;
+
     let filter = {};
+
     if (category) {
-      const categories = category.split(",");
-      filter.category = { $in: categories };
+      filter.category = { $in: category.split(",") };
     }
+
     if (startDate || endDate) {
       filter.startDate = {};
-      if (startDate) filter.startDate.$gte = startDate;
-      if (endDate) filter.startDate.$lte = endDate;
+      if (startDate) filter.startDate.$gte = new Date(startDate);
+      if (endDate) filter.startDate.$lte = new Date(endDate);
     }
-    if (participantsMin || participantsMax) {
-      filter.participants = {};
-      if (participantsMin) filter.participants.$gte = parseInt(participantsMin);
-      if (participantsMax) filter.participants.$lte = parseInt(participantsMax);
+
+    if (search) {
+      const searchTerm = String(search).trim();
+      if (searchTerm !== "") {
+        filter.title = { $regex: searchTerm, $options: "i" };
+      }
     }
-    const challenges = await challengesCollection.find(filter).toArray();
-    res.json(challenges);
+
+    let sortOption = {};
+    if (sort === "participantsDesc") sortOption.participants = -1;
+    else if (sort === "participantsAsc") sortOption.participants = 1;
+    else sortOption._id = -1;
+
+    const challenges = await challengesCollection
+      .find(filter)
+      .sort(sortOption)
+      .skip((pageNum - 1) * pageSize)
+      .limit(pageSize)
+      .toArray();
+
+    const total = await challengesCollection.countDocuments(filter);
+
+    res.json({
+      data: challenges,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / pageSize),
+    });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: "Failed to fetch challenges" });
   }
 });
+// POST /users → Save user after registration
+app.post("/users", async (req, res) => {
+  try {
+    const user = req.body;
+
+    // email দিয়ে duplicate check
+    const existingUser = await usersCollection.findOne({ email: user.email });
+
+    if (existingUser) {
+      return res.status(200).json({ message: "User already exists" });
+    }
+
+    const result = await usersCollection.insertOne({
+      name: user.name,
+      email: user.email,
+      photo: user.photo,
+      role: "user",
+      createdAt: new Date(),
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to save user" });
+  }
+});
+
+
 // active-challenges
 app.get("/challenges-active", async (req, res) => {
   try {
@@ -118,13 +169,16 @@ app.post("/challenges-add", async (req, res) => {
   try {
     const newChallenge = req.body;
 
-    if (!newChallenge.title || !newChallenge.description || !newChallenge.imageUrl) {
+    if (
+      !newChallenge.title ||
+      !newChallenge.description ||
+      !newChallenge.imageUrl
+    ) {
       return res
         .status(400)
         .json({ error: "Title, description, and imageUrl are required" });
     }
 
-    
     const existing = await challengesCollection.findOne({
       $or: [
         { title: newChallenge.title },
@@ -135,7 +189,8 @@ app.post("/challenges-add", async (req, res) => {
 
     if (existing) {
       return res.status(400).json({
-        error: "A challenge with the same title, description, or image already exists",
+        error:
+          "A challenge with the same title, description, or image already exists",
       });
     }
 
@@ -160,9 +215,7 @@ app.post("/challenges-add", async (req, res) => {
   }
 });
 
-
-
-// Join challenge 
+// Join challenge
 app.patch("/challenges-join/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -189,7 +242,7 @@ app.patch("/challenges-join/:id", async (req, res) => {
         { $inc: { participants: 1 }, $set: { updatedAt: now } }
       );
       return res.status(200).json({ message: "Successfully joined!" });
-    } 
+    }
     res.json({ message: "Already joined" });
   } catch (err) {
     console.error(err);
@@ -238,39 +291,41 @@ app.get("/my-activities/:email", async (req, res) => {
   try {
     const email = req.params.email;
 
-    const result = await userChallengesCollection.aggregate([
-      {
-        $match: { userId: email },
-      },
-      {
-        $lookup: {
-          from: "challenges",
-          localField: "challengeId",
-          foreignField: "_id",
-          as: "challengeData",
+    const result = await userChallengesCollection
+      .aggregate([
+        {
+          $match: { userId: email },
         },
-      },
-      {
-        $unwind: "$challengeData",
-      },
-      {
-        $project: {
-          _id: 1,
-          userId: 1,
-          challengeId: 1,
-          progress: 1,
-          status: 1,
-          challengeTitle: "$challengeData.title", 
-          category: "$challengeData.category",
-          duration: "$challengeData.duration",
-          target: "$challengeData.target",
+        {
+          $lookup: {
+            from: "challenges",
+            localField: "challengeId",
+            foreignField: "_id",
+            as: "challengeData",
+          },
         },
-      },
-    ]).toArray();
+        {
+          $unwind: "$challengeData",
+        },
+        {
+          $project: {
+            _id: 1,
+            userId: 1,
+            challengeId: 1,
+            progress: 1,
+            status: 1,
+            challengeTitle: "$challengeData.title",
+            category: "$challengeData.category",
+            duration: "$challengeData.duration",
+            target: "$challengeData.target",
+          },
+        },
+      ])
+      .toArray();
 
     res.send(result);
   } catch (error) {
-    console.error("❌ Error fetching user activities:", error);
+    console.error(" Error fetching user activities:", error);
     res.status(500).send({ message: "Server error" });
   }
 });
@@ -279,11 +334,14 @@ app.get("/my-activities/:email", async (req, res) => {
 app.get("/user-challenges/item/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const item = await userChallengesCollection.findOne({ _id: new ObjectId(id) });
+    const item = await userChallengesCollection.findOne({
+      _id: new ObjectId(id),
+    });
     if (!item) return res.status(404).json({ error: "Not found" });
 
-    
-    const challenge = await challengesCollection.findOne({ _id: item.challengeId });
+    const challenge = await challengesCollection.findOne({
+      _id: item.challengeId,
+    });
     if (challenge) item.challengeTitle = challenge.title;
 
     res.json(item);
