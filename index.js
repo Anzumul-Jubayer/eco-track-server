@@ -103,12 +103,12 @@ app.get("/challenges", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch challenges" });
   }
 });
-// POST /users → Save user after registration
+// POST /users 
 app.post("/users", async (req, res) => {
   try {
     const user = req.body;
 
-    // email দিয়ে duplicate check
+    
     const existingUser = await usersCollection.findOne({ email: user.email });
 
     if (existingUser) {
@@ -128,7 +128,7 @@ app.post("/users", async (req, res) => {
     res.status(500).json({ error: "Failed to save user" });
   }
 });
-
+// patch user
 app.patch('/users-update/:email', async (req, res) => {
     try {
         const email = req.params.email;
@@ -142,14 +142,14 @@ app.patch('/users-update/:email', async (req, res) => {
             },
         };
 
-        // ✅ USE YOUR ACTUAL COLLECTION VARIABLE NAME HERE
+        
         const result = await usersCollection.updateOne(filter, updatedDoc);
 
         if (result.matchedCount === 0) {
             return res.status(404).send({ message: "User not found" });
         }
 
-        // Return the updated data so the frontend can sync
+        
         res.send({ 
             user: { name, photo }, 
             success: true 
