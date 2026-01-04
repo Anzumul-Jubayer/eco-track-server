@@ -22,7 +22,7 @@ let challengesCollection;
 let tipsCollection;
 let eventsCollection;
 let userChallengesCollection;
-
+let usersCollection;
 async function run() {
   try {
     // await client.connect();
@@ -128,6 +128,39 @@ app.post("/users", async (req, res) => {
     res.status(500).json({ error: "Failed to save user" });
   }
 });
+
+app.patch('/users-update/:email', async (req, res) => {
+    try {
+        const email = req.params.email;
+        const { name, photo } = req.body;
+
+        const filter = { email: email };
+        const updatedDoc = {
+            $set: {
+                name: name,
+                photo: photo
+            },
+        };
+
+        // ✅ USE YOUR ACTUAL COLLECTION VARIABLE NAME HERE
+        const result = await usersCollection.updateOne(filter, updatedDoc);
+
+        if (result.matchedCount === 0) {
+            return res.status(404).send({ message: "User not found" });
+        }
+
+        // Return the updated data so the frontend can sync
+        res.send({ 
+            user: { name, photo }, 
+            success: true 
+        });
+
+    } catch (error) {
+        console.error("Database Error:", error);
+        res.status(500).send({ message: "Internal Server Error" });
+    }
+});
+
 
 
 // active-challenges
